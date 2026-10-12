@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>共用的空間・共處的關係｜科週會簡報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&family=Noto+Serif+TC:wght@500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1814; color: #f6f0e4;
+    font-family: 'Noto Sans TC', -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+  /* 投影片畫布：固定 1920×1080，等比縮放置中 */
+  #stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px;
+    transform-origin: center center; overflow: hidden; background: #f6f0e4; }
+  #stage > section { position: absolute; inset: 0; width: 1920px; height: 1080px; box-sizing: border-box;
+    overflow: hidden; animation: fadein .35s ease; }
+  #stage > section[hidden] { display: none !important; }
+  #stage > section * { margin: 0; box-sizing: border-box; }
+  #stage > section img { display: block; }
+  #stage > section ul, #stage > section ol { padding-left: 1.2em; }
+  #liveQR img, #liveQR canvas { width: 520px !important; height: 520px !important; }
+  @keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
+  body:not(.authed) #stage, body:not(.authed) #toolbar, body:not(.authed) #presenter { visibility: hidden; }
+  body:not(.presenter) #stage { cursor: pointer; }
+
+  /* 登入畫面 */
+  #gate { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; background: #f6f0e4; color: #3a2e24; z-index: 50; text-align: center; padding: 24px; }
+  body.authed #gate { display: none; }
+  #gate h1 { font-family: 'Noto Serif TC', serif; font-size: clamp(28px, 4vw, 48px); margin: 0; }
+  #gate p { margin: 0; color: #7a6a5a; font-size: 18px; }
+
+  button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 9px; border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.08); color: inherit; cursor: pointer; white-space: nowrap; }
+  button:hover { background: rgba(255,255,255,.18); }
+  button.primary, #gate button { background: #2f7d74; border-color: #2f7d74; color: #fff; }
+  #gate button { font-size: 18px; padding: 12px 28px; border-radius: 12px; }
+  button.danger { background: #b4552d; border-color: #b4552d; color: #fff; }
+  input.iExp { width: 64px; font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.1); color: inherit; }
+
+  /* 工具列：滑鼠移動時才出現 */
+  #toolbar { position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: 14px; z-index: 20;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 24px);
+    background: rgba(28,24,20,.92); padding: 8px 12px; border-radius: 14px; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .3s; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  body.show-ui #toolbar, #toolbar:hover { opacity: 1; pointer-events: auto; }
+  #toolbar .sep { width: 1px; height: 22px; background: rgba(255,255,255,.2); }
+  #toolbar .grp { display: flex; align-items: center; gap: 6px; }
+  #pageNo, #cCount, .cState { font-variant-numeric: tabular-nums; color: #e6dccb; }
+  #who { color: #bfb3a2; font-size: 12px; }
+  #toolbar a { color: inherit; text-decoration: none; }
+
+  /* 講稿面板（同一個螢幕，會被投影出去，建議改用講者視窗）*/
+  #notesPanel { position: fixed; left: 0; right: 0; bottom: 0; max-height: 38vh; overflow: auto; z-index: 15;
+    background: rgba(20,17,14,.95); color: #f6f0e4; padding: 18px 28px 80px; font-size: 20px; line-height: 1.7;
+    white-space: pre-wrap; display: none; }
+  body.show-notes #notesPanel { display: block; }
+
+  /* 講者視窗 */
+  #presenter { position: fixed; inset: 0; display: grid; grid-template-columns: 58fr 42fr; gap: 16px; padding: 16px;
+    background: #1c1814; }
+  #presenter[hidden] { display: none !important; }
+  body.presenter #toolbar, body.presenter #notesPanel { display: none !important; }
+  #pLeft { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  #pStageBox { position: relative; flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: #000; }
+  #pNext { color: #bfb3a2; font-size: 16px; }
+  #pRight { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  #pTop { display: flex; align-items: center; gap: 12px; }
+  #pTimer { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #pPage { color: #bfb3a2; }
+  #pNotes { flex: 1; overflow: auto; background: #2a241e; border-radius: 10px; padding: 18px 20px;
+    font-size: 22px; line-height: 1.75; white-space: pre-wrap; }
+  #pCtrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #2a241e; border-radius: 10px; padding: 12px; }
+  #pCount { font-size: 22px; font-weight: 700; color: #9fd4cc; font-variant-numeric: tabular-nums; }
+  #pNav { display: flex; gap: 8px; }
+  #pNav button { flex: 1; font-size: 18px; padding: 12px; }
+</style>
+</head>
+<body>
+<div id="gate">
+  <h1>共用的空間・共處的關係</h1>
+  <p id="gateMsg">載入中…</p>
+  <button id="bLogin" hidden>用 Google 帳號登入</button>
+</div>
+
+<div id="stage">
+<section id="cover" data-transition="fade" style="display:flex; flex-direction:column; gap:40px; justify-content:center; padding:128px; background:#f6f0e4">
+  <img src="img/s1_cover.jpg" alt="四位穿護理制服的同學並肩走進灑滿晨光的教室" style="position:absolute; top:0; left:1110px; width:810px; height:1080px; object-fit:cover">
+  <div style="position:absolute; top:0; left:0; width:24px; height:1080px; display:flex; flex-direction:column; background:#2f7d74">
+  </div>
+  <h1 style="font-family:'Noto Serif TC', Georgia, serif; font-size:120px; font-weight:700; line-height:1.2; color:#2f7d74; width:960px">護理科 科週會・三年級</h1>
+  <h1 style="font-family:'Noto Serif TC', Georgia, serif; font-size:120px; font-weight:700; line-height:1.2; color:#3a2e24">共用的空間<br>共處的關係</h1>
+  <p style="width:960px; font-family:'Noto Sans TC', Arial, sans-serif; font-size:44px; line-height:1.5; color:#5c4b3c">教室是大家共用的空間，<br>同學是彼此共處的環境</p>
+  <aside>【約 1 分鐘】 各位同學好。 今天的科週會，我不打算訓話，也不是要抓誰做錯了什麼。 我想跟大家聊兩個很日常、天天都會碰到的東西：一個是我們每天在用的教室，另一個是每天一起上課的同學。 這兩件事很平常，平常到我們很少停下來想一想。今天就給自己一點時間，一起想一想。</aside>
+</section>
+<section id="two" data-transition="fade" style="background:#F6F0E4;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;line-height:1.2">今天想和大家聊兩件事</h2>
+<div style="display:flex;gap:40px">
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF8;border:2px solid #E4D8C4;border-radius:24px;padding:40px">
+<img src="img/s2_space.jpg" alt="陽光下整齊的教室角落，桌椅已收好" style="width:300px;height:300px;object-fit:cover;border-radius:16px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-size:32px;font-weight:700;color:#2F7D74;letter-spacing:4px">第一件</p>
+<h3 style="font-family:'Noto Serif TC', Georgia, serif;font-size:56px;font-weight:700">共用的空間</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">跑班、選修課的時候，我們都在使用別人的教室</p>
+</div>
+</div>
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF8;border:2px solid #E4D8C4;border-radius:24px;padding:40px">
+<img src="img/s2_friends.jpg" alt="兩位同學並肩看筆記、開心討論" style="width:300px;height:300px;object-fit:cover;border-radius:16px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-size:32px;font-weight:700;color:#2F7D74;letter-spacing:4px">第二件</p>
+<h3 style="font-family:'Noto Serif TC', Georgia, serif;font-size:56px;font-weight:700">共處的關係</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">每天一起上課的同學，就是我們相處的環境</p>
+</div>
+</div>
+</div>
+<p style="font-size:44px;font-weight:500;color:#3A2E24">兩件事其實是同一件事：<span style="color:#2F7D74">我們怎麼對待彼此。</span></p>
+<aside>【約 1 分鐘】
+第一件事是「共用的空間」。大家這學期常常跑班、上選修課，常常是在使用別人的教室。我們的教室，也常常有別班的同學在用。
+第二件事是「共處的關係」。每天一起上課、一起練技術的同學，就是我們每天相處的環境。這個環境舒不舒服，是我們大家一起決定的。
+這兩件事看起來不一樣，其實是同一件事：我們怎麼對待彼此。
+我們先從比較輕鬆的教室開始。</aside>
+</section>
+<section id="poster" data-transition="fade" style="background:#F9F0E3;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:0px;display:flex;flex-direction:column">
+<img src="img/s3_poster.jpg" alt="兩格插圖：左邊同學們在教室把桌椅排回原位，右邊同學離開前把垃圾丟進門邊垃圾桶、手上拿著飲料杯" style="position:absolute;left:0px;top:0px;width:1920px;height:1080px;object-fit:cover">
+<h2 style="position:absolute;left:160px;top:56px;width:1600px;font-family:'Noto Serif TC', Georgia, serif;font-size:64px;font-weight:700;line-height:1.2;text-align:center;color:#3A2E24">跑班／選修課 教室使用生活公約</h2>
+<p style="position:absolute;left:40px;top:204px;width:360px;font-size:36px;font-weight:700;line-height:1.3;color:#3A2E24;background:rgba(255,253,248,0.92);padding:12px 28px;border-radius:999px;border:2px solid #2F7D74"><span style="color:#2F7D74">1</span>　桌椅務必歸位</p>
+<p style="position:absolute;left:990px;top:204px;width:360px;font-size:36px;font-weight:700;line-height:1.3;color:#3A2E24;background:rgba(255,253,248,0.92);padding:12px 28px;border-radius:999px;border:2px solid #2F7D74"><span style="color:#2F7D74">2</span>　垃圾隨手帶走</p>
+<p style="position:absolute;left:160px;top:950px;width:1600px;font-family:'Noto Serif TC', Georgia, serif;font-size:48px;font-weight:700;line-height:1.3;text-align:center;color:#2F7D74">「去哪一班都一樣，請把整潔與秩序留給原班級！」</p>
+<aside>【約 1 分鐘】
+這張是我們的跑班公約，大家在教室應該看過。
+其實只有兩條，一點都不難：
+第一，桌椅務必歸位；第二，垃圾隨手帶走。
+最下面這句話是重點：去哪一班都一樣，請把整潔與秩序留給原班級。</aside>
+</section>
+<section id="rules" data-transition="fade" style="background:#F6F0E4;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;line-height:1.2">離開教室前，只要做兩件事</h2>
+<div style="display:flex;gap:40px">
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF8;border:2px solid #E4D8C4;border-radius:24px;padding:40px">
+<img src="img/s4_chair.jpg" alt="同學的手把椅子推回桌子底下" style="width:300px;height:300px;object-fit:cover;border-radius:16px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;color:#2F7D74;line-height:1">1</p>
+<h3 style="font-size:44px;font-weight:700">桌椅排回原位</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">上課移動過桌椅，下課前排回原狀</p>
+</div>
+</div>
+<div style="flex:1;display:flex;gap:32px;align-items:center;background:#FFFDF8;border:2px solid #E4D8C4;border-radius:24px;padding:40px">
+<img src="img/s4_trash.jpg" alt="同學離開教室前，把零食包裝丟進門邊的垃圾桶，手上拿著飲料杯" style="width:300px;height:300px;object-fit:cover;border-radius:16px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;color:#2F7D74;line-height:1">2</p>
+<h3 style="font-size:44px;font-weight:700">垃圾隨手帶走</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">個人垃圾、飲料杯<br>自己帶走</p>
+</div>
+</div>
+</div>
+<div style="flex:1"></div>
+<p style="font-family:'Noto Serif TC', Georgia, serif;font-size:44px;font-weight:500;line-height:1.6;color:#3A2E24;border-left:8px solid #2F7D74;padding:8px 0 8px 40px">你怎麼對待別人的教室，<br>別人就怎麼對待我們的教室。</p>
+<aside>【約 2 分鐘】
+第一條，桌椅排回原位。上課如果有分組、移動過桌椅，下課前花一點時間排回原狀。
+第二條，垃圾隨手帶走。自己的飲料杯、零食袋，離開時帶走丟掉。
+
+（停頓）請大家想像一下：上完一整天的課，回到自己的教室，發現桌椅歪七扭八，抽屜裡還塞著別人喝完的飲料杯。那時候心裡是什麼感覺？
+我們每一班，都是別人的原班級。
+你怎麼對待別人的教室，別人就怎麼對待我們的教室。
+其實只要離開前回頭看一眼座位，大概 10 秒鐘就做得到。</aside>
+</section>
+<section id="scan" data-transition="fade" style="background:#2F7D74;color:#F6F0E4;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<img src="img/s5_phone.png" alt="同學靠在桌上看著手機，旁邊浮著一個代表隱私的鎖頭" style="position:absolute;left:1432px;top:40px;width:360px;height:360px;object-fit:contain">
+<p style="font-size:32px;font-weight:700;color:#CFE6E1;letter-spacing:4px">自省時間</p>
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:96px;font-weight:700;line-height:1.2;color:#FFFDF8;width:1260px">接下來 3 分鐘，留給自己</h2>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#276A62;border-radius:24px;padding:44px">
+<span style="font-size:52px;line-height:1">🔒</span>
+<h3 style="font-size:44px;font-weight:700;color:#FFFDF8">完全匿名</h3>
+<p style="font-size:32px;color:#DCEDEA;line-height:1.5">不問姓名、班級、座號，老師也看不出是誰填的</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#276A62;border-radius:24px;padding:44px">
+<span style="font-size:52px;line-height:1">⏱️</span>
+<h3 style="font-size:44px;font-weight:700;color:#FFFDF8">6 題，約 3 分鐘</h3>
+<p style="font-size:32px;color:#DCEDEA;line-height:1.5">沒有標準答案，請照實際的自己回答</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#276A62;border-radius:24px;padding:44px">
+<span style="font-size:52px;line-height:1">💬</span>
+<h3 style="font-size:44px;font-weight:700;color:#FFFDF8">送出後有回饋</h3>
+<p style="font-size:32px;color:#DCEDEA;line-height:1.5">會看到一段只給你的回饋</p>
+</div>
+</div>
+<aside>【說明約 1 分鐘＋填寫約 3～4 分鐘】
+接下來 3 分鐘，留給你自己。等一下請大家拿出手機掃 QR Code，回答 6 個題目。
+有三件事先跟大家說清楚：
+第一，完全匿名。不問名字、班級、座號，連老師在後台都看不出是誰填的，所以請放心。
+第二，沒有標準答案。請照實際的自己回答，不用選你覺得老師想看的答案。
+第三，送出之後，手機上會出現一段只給你的回饋，只有你自己看得到。
+
+【操作】
+講完按下一頁，切到「即時頁」（QR Code 和人數）。
+</aside>
+</section>
+<section id="live" style="background:#F6F0E4;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:96px 128px;display:flex;flex-direction:column;gap:40px">
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;line-height:1.2;text-align:center">拿出手機，掃描 QR Code</h2>
+<div style="flex:1;display:flex;gap:120px;align-items:center;justify-content:center">
+<div style="background:#FFFFFF;padding:32px;border-radius:32px;border:2px solid #E4D8C4;display:flex;flex-direction:column;align-items:center;gap:16px">
+<div id="liveQR" style="width:520px;height:520px"></div>
+<p id="liveUrl" style="font-size:26px;color:#7A6A5A"></p>
+</div>
+<div style="width:640px;display:flex;flex-direction:column;align-items:center;gap:20px">
+<p style="font-size:44px;color:#7A6A5A">已參與</p>
+<p id="liveCount" style="font-size:220px;font-weight:800;color:#2F7D74;line-height:1;font-variant-numeric:tabular-nums">0</p>
+<div id="liveExpWrap" style="width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">
+<div style="width:560px;height:24px;background:#E9DFCF;border-radius:99px;overflow:hidden"><div id="liveFill" style="height:100%;width:0;background:#2F7D74;transition:width .6s"></div></div>
+<p id="liveExp" style="font-size:36px;color:#7A6A5A"></p>
+</div>
+<p id="liveStatus" style="font-size:36px;font-weight:700;padding:10px 32px;border-radius:999px;background:#EFE6D8;color:#7A6A5A">尚未開放填寫</p>
+</div>
+</div>
+<p style="text-align:center;font-size:32px;color:#2F7D74">🔒 完全匿名・不問姓名、班級、座號・送出後會看到給你的回饋</p>
+<aside>【填寫約 3～4 分鐘】
+【操作】在下方工具列按「開放填寫」（滑鼠移到畫面下方就會出現）。
+
+等待時可以說：
+「不用急，慢慢想。」
+「還沒掃到的同學，可以請旁邊的同學幫忙。」
+
+進度條顯示「全員完成」後說：「謝謝大家。」
+【操作】按「關閉填寫」，再按下一頁繼續。</aside>
+</section>
+<section id="bond" data-transition="fade" style="background:#F7EFE4;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:center;gap:48px">
+<img src="img/s6_bond.jpg" alt="三位同學在技術教室一起練習量血壓，彼此加油、笑得很開心" style="position:absolute;left:1110px;top:0px;width:810px;height:1080px;object-fit:cover">
+<p style="font-size:32px;font-weight:700;color:#2F7D74;letter-spacing:4px">共處的關係</p>
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:96px;font-weight:700;line-height:1.2">能同班，<br>是一種緣份</h2>
+<p style="font-size:44px;color:#3A2E24;line-height:1.6;width:940px">這麼多人裡，我們剛好在同一個班、同一間教室，一起走過這五年。</p>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.7;width:940px">畢業後，大家會走向不同的地方。但一起練技術、一起熬過考試的這段日子，只有我們有。<br>好好對待身邊的同學，就是珍惜這份緣份。</p>
+<aside>【約 2 分鐘】
+剛剛大家花了幾分鐘想自己。接下來想跟大家聊聊身邊的人。
+（停頓）這麼多人裡，我們剛好在同一個班、同一間教室，一起走過這五年。
+一起練技術、一起熬過考試、一起被老師念、一起笑。
+畢業之後，大家會走向不同的地方，有些人可能很久都不會再見面。但這段日子，只有我們這群人有。
+我想請大家想一想：五年後回想起這個班，你希望記得的是什麼樣的畫面？
+好好對待身邊的同學，就是珍惜這份緣份。</aside>
+</section>
+<section id="bystander" data-transition="fade" style="background:#F6F0E4;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:112px 128px;display:flex;flex-direction:column;gap:36px">
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;line-height:1.2">旁觀的你，其實很有力量</h2>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">群組裡有人被拿來開玩笑時，你不必公開出頭，也可以做點什麼：</p>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFDF8;border:2px solid #E4D8C4;border-top:8px solid #2F7D74;border-radius:24px;padding:32px">
+<img src="img/s7_noreact.jpg" alt="拿著手機看群組訊息，手指離開螢幕不回應" style="width:100%;height:330px;object-fit:cover;border-radius:16px">
+<h3 style="font-size:44px;font-weight:700">不跟著回應</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">不按讚、不加表情符號，這本身就是一種表態</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFDF8;border:2px solid #E4D8C4;border-top:8px solid #2F7D74;border-radius:24px;padding:32px">
+<img src="img/s7_topic.jpg" alt="群組裡傳出一張貓咪和珍珠奶茶的貼圖，把話題帶開" style="width:100%;height:330px;object-fit:cover;border-radius:16px">
+<h3 style="font-size:44px;font-weight:700">轉移話題</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">聊點別的，讓話題自然停下來</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFDF8;border:2px solid #E4D8C4;border-top:8px solid #2F7D74;border-radius:24px;padding:32px">
+<img src="img/s7_care.jpg" alt="同學私下傳訊息關心，坐在後面的同學收到後微笑抬頭" style="width:100%;height:330px;object-fit:cover;border-radius:16px">
+<h3 style="font-size:44px;font-weight:700">私下關心</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">私訊一句「還好嗎？」，讓他知道自己不是一個人</p>
+</div>
+</div>
+<aside>【約 3 分鐘】
+剛剛的問卷裡，有一題問到班上群組。大家都有這樣的經驗：群組裡有人開始拿某位同學開玩笑，大家一直回、一直按表情。
+很多人心裡其實覺得不太對，但不知道能做什麼，也怕自己出聲會變成下一個被針對的人。這個擔心很正常。
+今天想告訴大家：你不必公開出頭，也可以做點什麼。
+第一，不跟著回應。不按讚、不加表情符號，這本身就是一種表態。一個表情符號，對當事人來說，可能看起來是很多人在笑他。
+第二，轉移話題。聊點別的，傳張貼圖，讓話題自然停下來。
+第三，私下關心。私訊一句「還好嗎？」，讓他知道自己不是一個人。
+
+同學技術考失誤、心情不好的時候也一樣。不用說什麼大道理，一句「要不要一起再練一次？」就夠了。</aside>
+</section>
+<section id="help" data-transition="fade" style="background:#FFFDF8;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:112px 128px;display:flex;flex-direction:column;gap:36px">
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:72px;font-weight:700;line-height:1.2">需要幫忙的時候</h2>
+<p style="font-size:44px;color:#3A2E24;line-height:1.4">如果你最近在班上相處得不太開心，不用一個人撐著。</p>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#F6F0E4;border-radius:24px;padding:32px">
+<img src="img/s8_teacher.jpg" alt="導師和學生並肩坐著輕鬆談話" style="width:100%;height:330px;object-fit:cover;border-radius:16px">
+<h3 style="font-size:44px;font-weight:700">導師</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">[可以找導師的時間或方式]</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#F6F0E4;border-radius:24px;padding:32px">
+<img src="img/s8_room.jpg" alt="半開的門後，是溫暖明亮、擺著沙發的會談室" style="width:100%;height:330px;object-fit:cover;border-radius:16px">
+<h3 style="font-size:44px;font-weight:700">輔導室</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">[輔導室位置・開放時間]</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#F6F0E4;border-radius:24px;padding:32px">
+<img src="img/s8_friend.jpg" alt="兩位朋友坐在樹下長椅上，一人輕拍另一人的肩膀" style="width:100%;height:330px;object-fit:cover;border-radius:16px">
+<h3 style="font-size:44px;font-weight:700">信任的人</h3>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.5">找一位信任的同學或家人聊聊</p>
+</div>
+</div>
+<aside>【約 1.5 分鐘，語氣放慢，不要看向特定的人或班級】
+最後想跟大家說：如果你最近在班上相處得不太開心，不用一個人撐著。
+你可以找導師聊聊，（唸出投影片上的時間或方式）。
+也可以到輔導室，（唸出位置和開放時間）。
+或者，找一位你信任的同學或家人說說話。
+如果你發現身邊的同學好像不太好，也可以陪他一起去。
+說出來，不代表你很脆弱，而是代表你願意照顧自己。</aside>
+</section>
+<section id="closing" data-transition="fade" style="background:#F6F0E4;color:#3A2E24;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:center;gap:48px">
+<img src="img/s9_step_nurse.jpg" alt="穿護理服的同學背著書包，從走廊往灑滿陽光的教室門口踏出一步" style="position:absolute;left:1110px;top:0px;width:810px;height:1080px;object-fit:cover">
+<div style="position:absolute;left:0px;top:0px;width:24px;height:1080px;background:#2F7D74"></div>
+<h2 style="font-family:'Noto Serif TC', Georgia, serif;font-size:96px;font-weight:700;line-height:1.2">這週，<br>試試你選的一小步</h2>
+<p style="font-size:32px;color:#5C4B3C;line-height:1.6;width:940px">大家分享的好做法，會在會後整理公布，<br>不會出現任何人的名字。</p>
+<div style="flex:none;height:8px"></div>
+<p style="font-family:'Noto Serif TC', Georgia, serif;font-size:56px;font-weight:500;color:#2F7D74;line-height:1.5;width:940px">珍惜同窗的緣份，<br>從好好對待我們共用的空間開始。</p>
+<aside>【約 1 分鐘】
+剛剛的問卷最後一題，請大家為自己選一件這週願意試試看的小事：離開教室前回頭看一眼座位、在群組不跟風，或是主動跟一位比較少互動的同學說說話。
+這週就試試看你選的那一小步。
+大家寫下的好做法，我們會在會後整理出來跟大家分享，不會出現任何人的名字。
+珍惜同窗的緣份，從好好對待我們共用的空間開始。
+謝謝大家今天的參與，也謝謝大家的誠實。</aside>
+</section>
+</div>
+
+<div id="notesPanel"><span id="notesText"></span></div>
+
+<div id="toolbar">
+  <div class="grp"><button id="bPrev" title="上一頁（←）">◀</button><span id="pageNo">1 / 1</span><button id="bNext" title="下一頁（→）">▶</button></div>
+  <span class="sep"></span>
+  <div class="grp"><span>填寫：</span><span class="cState">—</span><span id="cCount">0 人</span><button class="bOpen primary">開放填寫</button></div>
+  <div class="grp"><span>應到</span><input class="iExp" type="number" min="0" max="2000" inputmode="numeric"><button class="bExp">更新</button></div>
+  <span class="sep"></span>
+  <div class="grp"><button id="bNotes" title="講稿（N）">講稿</button><button id="bPresenter" title="講者視窗（P）">講者視窗</button><button id="bFull" title="全螢幕（F）">全螢幕</button></div>
+  <span class="sep"></span>
+  <div class="grp"><a href="admin.html" target="_blank"><button>後台 ↗</button></a><button id="bLogout">登出</button><span id="who"></span></div>
+</div>
+
+<div id="presenter" hidden>
+  <div id="pLeft">
+    <div id="pStageBox"></div>
+    <div id="pNext"></div>
+  </div>
+  <div id="pRight">
+    <div id="pTop"><span id="pTimer">00:00</span><span id="pPage"></span></div>
+    <div id="pNotes"></div>
+    <div id="pCtrl">
+      <span>填寫：</span><span class="cState">—</span><span id="pCount">0 人</span>
+      <button class="bOpen primary">開放填寫</button>
+      <span style="margin-left:8px">應到</span><input class="iExp" type="number" min="0" max="2000" inputmode="numeric"><button class="bExp">更新</button>
+    </div>
+    <div id="pNav"><button id="pPrev">◀ 上一頁</button><button id="pNext2" class="primary">下一頁 ▶</button></div>
+  </div>
+</div>
+
+<script type="module">
+import { db, auth, SHARDS, USE_EMULATOR } from "./common.js";
+import { GoogleAuthProvider, signInWithPopup, signInWithCredential, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { doc, setDoc, onSnapshot, getDocs, collection, query, where, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = (id) => document.getElementById(id);
+const PRESENTER = new URLSearchParams(location.search).has("presenter");
+const slides = [...document.querySelectorAll("#stage > section")];
+const notes = slides.map((s) => {
+  const a = s.querySelector("aside");
+  const t = a ? a.textContent.trim() : "";
+  if (a) a.remove();
+  return t;
+});
+const titles = slides.map((s) => (s.querySelector("h1,h2,h3")?.textContent || s.id).replace(/\s+/g, " ").trim());
+let cur = 0;
+
+// ---------- 版面縮放 ----------
+const stage = $("stage");
+function fit() {
+  const box = PRESENTER ? $("pStageBox") : document.body;
+  const w = PRESENTER ? box.clientWidth : innerWidth;
+  const h = PRESENTER ? box.clientHeight : innerHeight;
+  const s = Math.min(w / 1920, h / 1080);
+  stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+}
+if (PRESENTER) {
+  document.body.classList.add("presenter");
+  $("pStageBox").appendChild(stage);
+  $("presenter").hidden = false;
+}
+addEventListener("resize", fit);
+
+// ---------- 換頁 ----------
+const bc = "BroadcastChannel" in window ? new BroadcastChannel("assembly-present") : null;
+function go(i, remote = false) {
+  i = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => (s.hidden = k !== i));
+  cur = i;
+  $("pageNo").textContent = `${i + 1} / ${slides.length}`;
+  $("notesText").textContent = notes[i] || "（這張沒有講稿）";
+  if (PRESENTER) {
+    $("pNotes").textContent = notes[i] || "（這張沒有講稿）";
+    $("pNext").textContent = i + 1 < slides.length ? `下一張：${titles[i + 1]}` : "（最後一張）";
+    $("pPage").textContent = `${i + 1} / ${slides.length}`;
+  }
+  document.body.classList.toggle("on-live", slides[i].id === "live");
+  try { history.replaceState(null, "", "#" + (i + 1)); } catch {}
+  if (!remote && bc) bc.postMessage({ type: "goto", i });
+}
+const next = () => go(cur + 1);
+const prev = () => go(cur - 1);
+if (bc) bc.onmessage = (e) => {
+  if (e.data?.type === "goto") go(e.data.i, true);
+  if (e.data?.type === "hello" && !PRESENTER) bc.postMessage({ type: "goto", i: cur });
+};
+
+addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea")) return;
+  const k = e.key;
+  if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(k)) { e.preventDefault(); next(); }
+  else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(k)) { e.preventDefault(); prev(); }
+  else if (k === "Home") go(0);
+  else if (k === "End") go(slides.length - 1);
+  else if (k === "f" || k === "F") toggleFull();
+  else if (k === "n" || k === "N") toggleNotes();
+  else if (k === "p" || k === "P") openPresenter();
+});
+if (!PRESENTER) {
+  stage.addEventListener("click", (e) => (e.clientX > innerWidth / 3 ? next() : prev()));
+}
+
+// ---------- 工具列 ----------
+let hideTimer;
+function pokeUI() {
+  document.body.classList.add("show-ui");
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (!$("toolbar").matches(":hover") && document.activeElement?.tagName !== "INPUT") document.body.classList.remove("show-ui");
+  }, 2500);
+}
+addEventListener("mousemove", pokeUI);
+function toggleFull() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+}
+function toggleNotes() { document.body.classList.toggle("show-notes"); }
+function openPresenter() {
+  const url = location.pathname + "?presenter" + (USE_EMULATOR ? "&emu" : "") + "#" + (cur + 1);
+  window.open(url, "assembly-presenter", "width=1280,height=800");
+}
+$("bPrev").onclick = prev;
+$("bNext").onclick = next;
+$("bNotes").onclick = toggleNotes;
+$("bPresenter").onclick = openPresenter;
+$("bFull").onclick = toggleFull;
+$("bLogout").onclick = () => signOut(auth);
+if (PRESENTER) {
+  $("pPrev").onclick = prev;
+  $("pNext2").onclick = next;
+  const t0 = Date.now();
+  setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $("pTimer").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  }, 1000);
+}
+
+// ---------- 即時頁：QR Code、人數、填寫開關 ----------
+const target = new URL("index.html", location.href);
+target.search = USE_EMULATOR ? "?emu" : "";
+target.hash = "";
+$("liveUrl").textContent = target.host + target.pathname.replace(/index\.html$/, "");
+try {
+  new QRCode($("liveQR"), { text: target.href, width: 520, height: 520, colorDark: "#3a2e24", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+} catch { $("liveQR").textContent = "QR Code 載入失敗，請改用下方網址"; }
+
+let cfg = null, session = null, unsubs = [], expected = 0;
+const counts = {};
+function renderCount() {
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  $("liveCount").innerHTML = `${total}<span style="font-size:72px;color:#7a6a5a;font-weight:600"> 人</span>`;
+  $("cCount").textContent = expected ? `${total} / ${expected} 人` : `${total} 人`;
+  if (PRESENTER) $("pCount").textContent = $("cCount").textContent;
+  $("liveExpWrap").style.visibility = expected ? "visible" : "hidden";
+  if (expected) {
+    $("liveFill").style.width = Math.min(100, (total / expected) * 100) + "%";
+    const left = expected - total;
+    $("liveExp").textContent = left > 0 ? `應到 ${expected} 人・還差 ${left} 人` : `應到 ${expected} 人・全員完成 🎉`;
+  }
+}
+function renderCfg() {
+  const open = !!cfg?.open;
+  $("liveStatus").textContent = open ? "● 開放填寫中" : "尚未開放填寫";
+  $("liveStatus").style.background = open ? "#e3f1ee" : "#efe6d8";
+  $("liveStatus").style.color = open ? "#2f7d74" : "#7a6a5a";
+  for (const b of document.querySelectorAll(".bOpen")) {
+    b.textContent = !cfg ? "建立場次" : open ? "關閉填寫" : "開放填寫";
+    b.classList.toggle("danger", open);
+  }
+  for (const s of document.querySelectorAll(".cState")) s.textContent = !cfg ? "尚無場次" : open ? "開放中" : "未開放";
+  for (const inp of document.querySelectorAll(".iExp")) if (document.activeElement !== inp) inp.value = cfg?.expected || "";
+}
+async function writeCfg(nextCfg) {
+  try { await setDoc(doc(db, "config", "current"), nextCfg); }
+  catch (e) { alert("沒有權限或連線失敗：" + e.message); }
+}
+function newSessionId() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `s${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+for (const b of document.querySelectorAll(".bOpen")) b.onclick = () => {
+  if (!cfg) return writeCfg({ session: newSessionId(), open: false, expected: 0 });
+  writeCfg({ ...cfg, open: !cfg.open });
+};
+for (const b of document.querySelectorAll(".bExp")) b.onclick = () => {
+  const inp = b.parentElement.querySelector(".iExp");
+  if (!cfg) return alert("請先建立場次");
+  const n = Math.max(0, Math.min(2000, parseInt(inp.value, 10) || 0));
+  writeCfg({ ...cfg, expected: n });
+  inp.blur();
+};
+
+function startLive() {
+  onSnapshot(doc(db, "config", "current"), (snap) => {
+    cfg = snap.exists() ? snap.data() : null;
+    expected = cfg?.expected || 0;
+    renderCfg();
+    renderCount();
+    if ((cfg?.session || null) === session) return;
+    session = cfg?.session || null;
+    unsubs.forEach((u) => u());
+    unsubs = [];
+    for (const k in counts) delete counts[k];
+    renderCount();
+    if (!session) return;
+    for (let i = 0; i < SHARDS; i++) {
+      unsubs.push(onSnapshot(doc(db, "stats", `${session}_${i}`), (s) => { counts[i] = s.data()?.count || 0; renderCount(); }));
+    }
+  });
+}
+
+// ---------- 登入（只有老師帳號能使用）----------
+if (USE_EMULATOR) {
+  window.__testSignIn = (email) => signInWithCredential(auth,
+    GoogleAuthProvider.credential(JSON.stringify({ sub: email, email, email_verified: true })));
+}
+$("bLogin").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => { $("gateMsg").textContent = "登入失敗：" + e.message; });
+let started = false;
+let deniedMsg = "";
+onAuthStateChanged(auth, async (user) => {
+  if (!user || user.isAnonymous) {
+    document.body.classList.remove("authed");
+    $("gateMsg").textContent = deniedMsg || "請用老師的 Google 帳號登入";
+    $("bLogin").hidden = false;
+    return;
+  }
+  $("gateMsg").textContent = "確認權限中…";
+  $("bLogin").hidden = true;
+  try {
+    await getDocs(query(collection(db, "responses"), where("session", "==", "__check__"), limit(1)));
+  } catch (e) {
+    deniedMsg = `${user.email} 沒有管理權限，請換老師帳號登入。`;
+    $("gateMsg").textContent = deniedMsg;
+    $("bLogin").hidden = false;
+    await signOut(auth);
+    return;
+  }
+  deniedMsg = "";
+  $("who").textContent = user.email;
+  document.body.classList.add("authed");
+  if (!started) { started = true; startLive(); }
+  fit();
+  pokeUI();
+});
+
+// ---------- 啟動 ----------
+addEventListener("hashchange", () => {
+  const n = parseInt(location.hash.slice(1), 10);
+  if (Number.isFinite(n) && n - 1 !== cur) go(n - 1);
+});
+const start = parseInt(location.hash.slice(1), 10);
+go(Number.isFinite(start) ? start - 1 : 0, true);
+fit();
+if (PRESENTER && bc) bc.postMessage({ type: "hello" });
+
+</script>
+</body>
+</html>
