@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>科週會大螢幕</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root { --bg: #f6f0e4; --ink: #3a2e24; --muted: #7a6a5a; --accent: #2f7d74; --line: #e4d8c4; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 3vh 4vw; gap: 3vh;
+  }
+  h1 { margin: 0; font-size: clamp(28px, 5vw, 72px); letter-spacing: .06em; text-align: center; }
+  .sub { margin: 0; font-size: clamp(16px, 2vw, 30px); color: var(--muted); text-align: center; }
+  main { display: flex; align-items: center; justify-content: center; gap: 6vw; flex-wrap: wrap; }
+  .qrbox { background: #fff; padding: 2.4vh; border-radius: 24px; border: 2px solid var(--line); text-align: center; }
+  #qrcode img, #qrcode canvas { display: block; width: min(42vh, 40vw) !important; height: auto !important; }
+  .url { margin-top: 1.2vh; font-size: clamp(14px, 1.6vw, 24px); color: var(--muted); word-break: break-all; max-width: min(42vh, 40vw); }
+  .side { text-align: center; }
+  .label { font-size: clamp(18px, 2.4vw, 36px); color: var(--muted); }
+  #count { font-size: clamp(80px, 14vw, 220px); font-weight: 800; color: var(--accent); line-height: 1.05; font-variant-numeric: tabular-nums; }
+  #count small { font-size: .3em; color: var(--muted); font-weight: 600; }
+  .status { display: inline-block; margin-top: 1.5vh; padding: .3em 1em; border-radius: 999px; font-size: clamp(16px, 2vw, 30px); font-weight: 700; }
+  .open { background: #e3f1ee; color: var(--accent); }
+  .shut { background: #efe6d8; color: var(--muted); }
+  .track { width: min(40vw, 520px); height: 2.2vh; min-height: 12px; background: #e9dfcf; border-radius: 99px; overflow: hidden; margin: 1vh auto; }
+  .fill { height: 100%; width: 0; background: var(--accent); transition: width .6s; }
+  .hidden { display: none; }
+  .anon { font-size: clamp(16px, 2vw, 30px); color: var(--accent); border: 2px dashed var(--accent); border-radius: 16px; padding: .5em 1.2em; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>共用的空間・共處的關係</h1>
+  <p class="sub">請拿出手機掃描 QR Code，花 3 分鐘誠實地想一想</p>
+  <main>
+    <div class="qrbox">
+      <div id="qrcode"></div>
+      <div class="url" id="url"></div>
+    </div>
+    <div class="side">
+      <div class="label">已參與</div>
+      <div id="count">0<small> 人</small></div>
+      <div id="expWrap" class="hidden">
+        <div class="track"><div id="fill" class="fill"></div></div>
+        <div id="expText" class="label"></div>
+      </div>
+      <div id="status" class="status shut">連線中…</div>
+    </div>
+  </main>
+  <div class="anon">🔒 完全匿名・不問姓名、班級、座號・送出後會看到給你的回饋</div>
+
+<script type="module">
+import { db, SHARDS } from "./common.js";
+import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// 學生作答頁網址（和這頁放在同一個資料夾）
+const target = new URL("index.html", location.href);
+target.search = location.search; // 測試模式 ?emu 會一起帶過去
+document.getElementById("url").textContent = target.host + target.pathname.replace(/index\.html$/, "");
+try {
+  new QRCode(document.getElementById("qrcode"), {
+    text: target.href, width: 512, height: 512,
+    colorDark: "#3a2e24", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M,
+  });
+} catch (e) {
+  document.getElementById("qrcode").textContent = "QR Code 載入失敗，請改用下方網址";
+}
+
+let session = null;
+let unsubs = [];
+const counts = {};
+let expected = 0;
+const render = () => {
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  document.getElementById("count").innerHTML = `${total}<small> 人</small>`;
+  document.getElementById("expWrap").classList.toggle("hidden", !expected);
+  if (expected) {
+    document.getElementById("fill").style.width = Math.min(100, (total / expected) * 100) + "%";
+    const left = expected - total;
+    document.getElementById("expText").textContent =
+      left > 0 ? `應到 ${expected} 人・還差 ${left} 人` : `應到 ${expected} 人・全員完成 🎉`;
+  }
+};
+
+onSnapshot(doc(db, "config", "current"), (snap) => {
+  const c = snap.data() || {};
+  const st = document.getElementById("status");
+  st.textContent = c.open ? "● 開放填寫中" : "尚未開放";
+  st.className = "status " + (c.open ? "open" : "shut");
+  expected = c.expected || 0;
+  render();
+  if (c.session === session) return;
+  session = c.session;
+  unsubs.forEach((u) => u());
+  unsubs = [];
+  for (const k in counts) delete counts[k];
+  render();
+  if (!session) return;
+  for (let i = 0; i < SHARDS; i++) {
+    unsubs.push(onSnapshot(doc(db, "stats", `${session}_${i}`), (s) => {
+      counts[i] = s.data()?.count || 0;
+      render();
+    }));
+  }
+}, () => {
+  const st = document.getElementById("status");
+  st.textContent = "連線失敗，請重新整理";
+});
+</script>
+</body>
+</html>

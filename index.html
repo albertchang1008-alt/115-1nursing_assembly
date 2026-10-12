@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>共用的空間・共處的關係</title>
+<style>
+  :root {
+    --bg: #f6f0e4; --card: #fffdf8; --ink: #3a2e24; --muted: #7a6a5a;
+    --line: #e4d8c4; --accent: #2f7d74; --accent-soft: #e3f1ee; --warn: #b4552d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.6; -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+  header { text-align: center; padding: 20px 8px 12px; }
+  header .badge { display: inline-block; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 2px 12px; border-radius: 999px; }
+  header h1 { font-size: 24px; margin: 8px 0 4px; letter-spacing: .04em; }
+  header p { margin: 0; font-size: 14px; color: var(--muted); }
+  .anon { margin: 12px 0 4px; padding: 10px 14px; background: var(--card); border: 1px dashed var(--accent); border-radius: 12px; font-size: 14px; color: var(--accent); text-align: center; }
+  .section-title { margin: 28px 4px 8px; font-size: 14px; font-weight: 700; color: var(--muted); letter-spacing: .1em; }
+  .q { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .q h2 { font-size: 17px; margin: 0 0 4px; line-height: 1.5; }
+  .q .hint { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .opt { display: flex; align-items: center; gap: 10px; padding: 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 16px; cursor: pointer; background: #fff; }
+  .opt input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; margin: 0; }
+  .opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .scale { display: flex; justify-content: space-between; gap: 6px; margin-top: 10px; }
+  .scale label { flex: 1; text-align: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px 0; font-size: 18px; font-weight: 700; background: #fff; cursor: pointer; }
+  .scale input { position: absolute; opacity: 0; pointer-events: none; }
+  .scale label:has(input:checked) { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .scale-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  textarea { width: 100%; font-size: 16px; font-family: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; resize: vertical; min-height: 88px; background: #fff; color: var(--ink); }
+  .count { text-align: right; font-size: 12px; color: var(--muted); }
+  .missing { border-color: var(--warn); box-shadow: 0 0 0 2px rgba(180,85,45,.15); }
+  button.primary { width: 100%; margin-top: 16px; padding: 16px; font-size: 17px; font-weight: 700; color: #fff; background: var(--accent); border: 0; border-radius: 14px; cursor: pointer; }
+  button.primary:disabled { opacity: .6; }
+  .msg { padding: 32px 20px; text-align: center; background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-top: 16px; }
+  .msg h2 { margin: 0 0 8px; font-size: 20px; }
+  .msg p { margin: 0; color: var(--muted); }
+  .err { color: var(--warn); font-size: 14px; text-align: center; margin-top: 10px; min-height: 1em; }
+  .fb { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+  .fb .tag { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .08em; }
+  .fb p { margin: 2px 0 0; font-size: 16px; }
+  .help { margin-top: 20px; padding: 14px; border-radius: 12px; background: #fbeee6; color: #7a3d22; font-size: 15px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="badge">科週會・自省時間</span>
+    <h1>共用的空間・共處的關係</h1>
+    <p>教室是大家共用的空間，同學是彼此共處的環境</p>
+  </header>
+
+  <div id="loading" class="msg"><p>載入中…</p></div>
+
+  <div id="closed" class="msg hidden">
+    <h2>問卷還沒開放</h2>
+    <p>老師開放後，這個畫面會自動切換，不用重新整理。</p>
+  </div>
+
+  <form id="form" class="hidden" novalidate>
+    <div class="anon">🔒 完全匿名：不問姓名、班級、座號，老師也看不出是誰填的</div>
+    <div id="questions"></div>
+    <button id="submit" class="primary" type="submit">送出，看看給我的回饋</button>
+    <div id="err" class="err"></div>
+  </form>
+
+  <div id="done" class="hidden">
+    <div class="msg" style="padding:20px">
+      <h2>謝謝你誠實的回答 🌱</h2>
+      <p>這是給你的回饋，只有你看得到</p>
+    </div>
+    <div id="feedback"></div>
+    <div id="help" class="help"></div>
+  </div>
+</div>
+
+<script type="module">
+import { db, auth, Q, SHARDS, HELP_TEXT, feedbackFor } from "./common.js";
+import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { doc, getDoc, onSnapshot, writeBatch, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => ["loading", "closed", "form", "done"].forEach((k) => $(k).classList.toggle("hidden", k !== id));
+let session = null;
+let uid = null;
+
+// ---------- 產生題目 ----------
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids) e.append(k);
+  return e;
+}
+function choice(type, name, value, text) {
+  return el("label", { class: "opt" }, el("input", { type, name, value }), el("span", {}, text));
+}
+function buildQuestions() {
+  const box = $("questions");
+  box.append(el("div", { class: "section-title" }, "一、我們共用的空間"));
+
+  const a1 = el("div", { class: "q", id: "q-a1" }, el("h2", {}, Q.a1.title), el("p", { class: "hint" }, Q.a1.hint));
+  Q.a1.options.forEach((o) => a1.append(choice("checkbox", "a1", o.v, o.t)));
+  a1.append(choice("checkbox", "a1", "none", Q.a1.none));
+  box.append(a1);
+
+  const a2 = el("div", { class: "q", id: "q-a2" }, el("h2", {}, Q.a2.title));
+  const scale = el("div", { class: "scale" });
+  for (let i = 1; i <= 5; i++) scale.append(el("label", {}, el("input", { type: "radio", name: "a2", value: i }), String(i)));
+  a2.append(scale, el("div", { class: "scale-ends" }, el("span", {}, Q.a2.min), el("span", {}, Q.a2.max)));
+  box.append(a2);
+
+  box.append(el("div", { class: "section-title" }, "二、我們共處的關係"));
+  for (const k of ["b1", "b2"]) {
+    const q = el("div", { class: "q", id: `q-${k}` }, el("h2", {}, Q[k].title));
+    Q[k].options.forEach((o) => q.append(choice("radio", k, o.v, o.t)));
+    box.append(q);
+  }
+
+  box.append(el("div", { class: "section-title" }, "三、我的一小步"));
+  const c1 = el("div", { class: "q", id: "q-c1" }, el("h2", {}, Q.c1.title));
+  Q.c1.options.forEach((o) => c1.append(choice("radio", "c1", o.v, o.t)));
+  box.append(c1);
+
+  const c2 = el("div", { class: "q", id: "q-c2" }, el("h2", {}, Q.c2.title), el("p", { class: "hint" }, Q.c2.hint));
+  const ta = el("textarea", { id: "c2", maxlength: Q.c2.max, placeholder: "想到什麼都可以寫，這裡是安全的" });
+  const cnt = el("div", { class: "count", id: "c2count" }, `0 / ${Q.c2.max}`);
+  ta.addEventListener("input", () => (cnt.textContent = `${ta.value.length} / ${Q.c2.max}`));
+  c2.append(ta, cnt);
+  box.append(c2);
+
+  // 「沒特別注意到」和其他選項互斥
+  box.querySelectorAll("input[name=a1]").forEach((inp) =>
+    inp.addEventListener("change", () => {
+      if (!inp.checked) return;
+      box.querySelectorAll("input[name=a1]").forEach((o) => {
+        if (o !== inp && (inp.value === "none" || o.value === "none")) o.checked = false;
+      });
+    })
+  );
+  box.addEventListener("change", (e) => e.target.closest(".q")?.classList.remove("missing"));
+}
+
+function readAnswers() {
+  const picked = (n) => [...document.querySelectorAll(`input[name=${n}]:checked`)].map((i) => i.value);
+  const a1raw = picked("a1");
+  const one = (n) => picked(n)[0];
+  return {
+    a1ok: a1raw.length > 0,
+    data: {
+      a1: a1raw.filter((v) => v !== "none"),
+      a2: one("a2") ? Number(one("a2")) : null,
+      b1: one("b1") ? Number(one("b1")) : null,
+      b2: one("b2") ? Number(one("b2")) : null,
+      c1: one("c1") || null,
+      c2: $("c2").value.trim().slice(0, Q.c2.max),
+    },
+  };
+}
+
+function showDone(ans) {
+  const box = $("feedback");
+  box.innerHTML = "";
+  for (const f of feedbackFor(ans)) {
+    const card = document.createElement("div");
+    card.className = "fb";
+    const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = f.tag;
+    const p = document.createElement("p"); p.textContent = f.text;
+    card.append(tag, p);
+    box.append(card);
+  }
+  $("help").textContent = "💬 " + HELP_TEXT;
+  show("done");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+const storeKey = () => `assembly_done_${session}`;
+function savedAnswers() {
+  try { return JSON.parse(localStorage.getItem(storeKey()) || "null"); } catch { return null; }
+}
+function saveAnswers(a) {
+  try { localStorage.setItem(storeKey(), JSON.stringify(a)); } catch {}
+}
+
+async function alreadySubmitted() {
+  if (savedAnswers()) return true;
+  try {
+    const snap = await getDoc(doc(db, "responses", `${session}_${uid}`));
+    return snap.exists();
+  } catch { return false; }
+}
+
+// ---------- 送出 ----------
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("err").textContent = "";
+  const { a1ok, data } = readAnswers();
+  const missing = [];
+  if (!a1ok) missing.push("a1");
+  for (const k of ["a2", "b1", "b2", "c1"]) if (data[k] == null) missing.push(k);
+  if (missing.length) {
+    missing.forEach((k) => $(`q-${k}`).classList.add("missing"));
+    $(`q-${missing[0]}`).scrollIntoView({ behavior: "smooth", block: "center" });
+    $("err").textContent = "還有題目沒有選喔（第 6 題可以不填）";
+    return;
+  }
+
+  const btn = $("submit");
+  btn.disabled = true;
+  btn.textContent = "送出中…";
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, "responses", `${session}_${uid}`), {
+    session, ...data, picked: false, // 刻意不記錄時間，避免被推敲出是誰
+  });
+  const shard = Math.floor(Math.random() * SHARDS);
+  batch.set(doc(db, "stats", `${session}_${shard}`), { count: increment(1) }, { merge: true });
+
+  try {
+    await Promise.race([
+      batch.commit(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 20000)),
+    ]);
+    saveAnswers(data);
+    showDone(data);
+  } catch (err) {
+    console.error(err);
+    if (await alreadySubmitted()) {
+      saveAnswers(data);
+      showDone(data);
+      return;
+    }
+    $("err").textContent = err.message === "timeout"
+      ? "網路有點慢，請確認連線後再按一次送出（不會重複計算）。"
+      : "送出沒有成功，可能問卷已關閉或網路中斷，請再試一次。";
+    btn.disabled = false;
+    btn.textContent = "再送出一次";
+  }
+});
+
+// ---------- 啟動 ----------
+buildQuestions();
+onAuthStateChanged(auth, (user) => {
+  if (!user) return;
+  uid = user.uid;
+  onSnapshot(doc(db, "config", "current"), async (snap) => {
+    const c = snap.data();
+    const prev = session;
+    session = c?.session || null;
+    if (session && session !== prev) {
+      const saved = savedAnswers();
+      if (saved) return showDone(saved);
+      if (await alreadySubmitted()) {
+        $("closed").querySelector("h2").textContent = "你已經填過了";
+        $("closed").querySelector("p").textContent = "謝謝你的參與！每個人每場只能填一次。";
+        $("closed").dataset.locked = "1";
+        return show("closed");
+      }
+    }
+    if (!$("done").classList.contains("hidden") || $("closed").dataset.locked) return; // 已經填完就停住
+    show(c?.open ? "form" : "closed");
+  }, () => { $("loading").innerHTML = "<p>連線失敗，請重新整理頁面。</p>"; });
+});
+signInAnonymously(auth).catch((err) => {
+  console.error(err);
+  $("loading").innerHTML = "<p>連線失敗，請確認網路後重新整理頁面。</p>";
+});
+</script>
+</body>
+</html>

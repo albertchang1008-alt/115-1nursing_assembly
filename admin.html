@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>科週會老師後台</title>
+<style>
+  :root { --bg: #f6f0e4; --card: #fffdf8; --ink: #3a2e24; --muted: #7a6a5a; --line: #e4d8c4; --accent: #2f7d74; --soft: #e3f1ee; --warn: #b4552d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.6;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 24px; margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 18px; margin: 0 0 12px; }
+  .note { font-size: 13px; color: var(--muted); }
+  button { font: inherit; font-size: 15px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.danger { color: var(--warn); border-color: var(--warn); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .pill { padding: 2px 12px; border-radius: 999px; font-weight: 700; font-size: 14px; }
+  .on { background: var(--soft); color: var(--accent); }
+  .off { background: #efe6d8; color: var(--muted); }
+  .big { font-size: 40px; font-weight: 800; color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .q { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; }
+  .q h3 { font-size: 15px; margin: 0 0 8px; }
+  .bar { margin: 6px 0; font-size: 14px; }
+  .bar .lbl { display: flex; justify-content: space-between; gap: 8px; }
+  .bar .track { height: 8px; background: #f0e8da; border-radius: 99px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--accent); }
+  .msgs { display: grid; gap: 8px; }
+  .m { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; }
+  .m.picked { border-color: var(--accent); background: var(--soft); }
+  .m input { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--accent); flex: none; }
+  .m p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+  textarea { width: 100%; min-height: 260px; font: inherit; font-size: 15px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+  .hidden { display: none !important; }
+  .err { color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>科週會老師後台</h1>
+    <div class="row">
+      <span id="who" class="note"></span>
+      <button id="login" class="primary hidden">用 Google 帳號登入</button>
+      <button id="logout" class="hidden">登出</button>
+    </div>
+  </header>
+
+  <div id="gate" class="card"><p id="gateMsg">載入中…</p></div>
+
+  <div id="app" class="hidden">
+    <section class="card">
+      <h2>① 場次控制</h2>
+      <div class="row">
+        <span>目前場次：<b id="sess">—</b></span>
+        <span id="openPill" class="pill off">未開放</span>
+        <button id="toggle" class="primary">開放填寫</button>
+        <button id="newSess">開新場次</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label>應到人數：<input id="expected" type="number" min="0" max="2000" inputmode="numeric" style="width:90px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"></label>
+        <button id="saveExp">更新</button>
+        <span class="note">填入在場人數，大螢幕會顯示「已參與 / 應到」</span>
+      </div>
+      <p class="note">「開新場次」會讓大家重新從 0 開始填寫（例如彩排完、正式開始前按一次）。舊場次的資料不會刪除，只是不再顯示。</p>
+    </section>
+
+    <section class="card">
+      <h2>② 填答統計（本場次）</h2>
+      <div class="row"><span class="big" id="total">0</span><span>份</span>
+        <button id="csv" style="margin-left:auto">匯出 Excel 可開的 CSV</button></div>
+      <p class="note">後台不記錄姓名、班級、座號與填答時間，留言順序也已打亂，老師看不出是誰填的。</p>
+      <div class="grid" id="stats"></div>
+    </section>
+
+    <section class="card">
+      <h2>③ 同學的話（第 6 題）</h2>
+      <p class="note">勾選想在會後公布的留言。沒勾的只有你看得到。<span id="pickedCount"></span></p>
+      <div class="msgs" id="msgs"></div>
+    </section>
+
+    <section class="card">
+      <h2>④ 會後公布稿</h2>
+      <p class="note">依統計自動產生，只放「過半數的正向結果」和你勾選的留言。可以直接修改後複製，貼到投影片、班級群組或公告。</p>
+      <textarea id="draft"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="regen">重新產生</button>
+        <button id="copy" class="primary">複製</button>
+        <span id="copied" class="note"></span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { db, auth, Q, USE_EMULATOR } from "./common.js";
+import { GoogleAuthProvider, signInWithPopup, signInWithCredential, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { doc, setDoc, updateDoc, onSnapshot, collection, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = (id) => document.getElementById(id);
+let cfg = null;
+let rows = [];
+let unsubRows = null;
+
+if (USE_EMULATOR) {
+  // 本機模擬器測試用的登入方式，正式網站不會出現
+  window.__testSignIn = (email) => signInWithCredential(auth,
+    GoogleAuthProvider.credential(JSON.stringify({ sub: email, email, email_verified: true })));
+}
+
+$("login").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => alert("登入失敗：" + e.message));
+$("logout").onclick = () => signOut(auth);
+
+function gate(msg) {
+  $("gate").classList.remove("hidden");
+  $("app").classList.add("hidden");
+  $("gateMsg").textContent = msg;
+}
+
+onAuthStateChanged(auth, (user) => {
+  if (unsubRows) { unsubRows(); unsubRows = null; }
+  $("login").classList.toggle("hidden", !!user && !user.isAnonymous);
+  $("logout").classList.toggle("hidden", !user || user.isAnonymous);
+  $("who").textContent = user && !user.isAnonymous ? user.email : "";
+  if (!user || user.isAnonymous) return gate("請用老師的 Google 帳號登入。");
+  gate("讀取中…");
+  onSnapshot(doc(db, "config", "current"), (snap) => {
+    cfg = snap.exists() ? snap.data() : null;
+    renderConfig();
+    listenRows();
+  });
+});
+
+function newSessionId() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `s${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+async function writeCfg(next) {
+  try { await setDoc(doc(db, "config", "current"), next); }
+  catch (e) { alert("沒有權限或連線失敗：" + e.message); }
+}
+$("toggle").onclick = () => cfg && writeCfg({ ...cfg, open: !cfg.open });
+$("saveExp").onclick = () => {
+  if (!cfg) return;
+  const n = Math.max(0, Math.min(2000, parseInt($("expected").value, 10) || 0));
+  writeCfg({ ...cfg, expected: n });
+};
+$("newSess").onclick = () => {
+  if (cfg && !confirm("確定要開新場次？大螢幕人數會歸零，學生可以重新填寫。")) return;
+  writeCfg({ session: newSessionId(), open: false, expected: cfg?.expected || 0 });
+};
+
+function renderConfig() {
+  if (!cfg) {
+    $("sess").textContent = "尚未建立";
+    $("toggle").classList.add("hidden");
+    $("newSess").textContent = "建立第一個場次";
+    return;
+  }
+  $("toggle").classList.remove("hidden");
+  $("newSess").textContent = "開新場次";
+  $("sess").textContent = cfg.session;
+  if (document.activeElement !== $("expected")) $("expected").value = cfg.expected || "";
+  $("openPill").textContent = cfg.open ? "開放填寫中" : "未開放";
+  $("openPill").className = "pill " + (cfg.open ? "on" : "off");
+  $("toggle").textContent = cfg.open ? "關閉填寫" : "開放填寫";
+}
+
+let listeningFor;
+function listenRows() {
+  const s = cfg?.session || null;
+  if (s === listeningFor && unsubRows) return;
+  listeningFor = s;
+  if (unsubRows) unsubRows();
+  unsubRows = null;
+  if (!s) { $("gate").classList.add("hidden"); $("app").classList.remove("hidden"); rows = []; return renderAll(); }
+  unsubRows = onSnapshot(query(collection(db, "responses"), where("session", "==", s)), (snap) => {
+    // 依匿名編號排序 = 隨機順序，看不出填寫先後
+    rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.id < b.id ? -1 : 1));
+    $("gate").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    renderAll();
+  }, (e) => gate(e.code === "permission-denied" ? "這個帳號沒有管理權限。請確認 firestore.rules 裡的老師帳號設定。" : "讀取失敗：" + e.message));
+}
+
+// ---------- 統計 ----------
+const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+function summary() {
+  const N = rows.length;
+  const cnt = (f) => rows.filter(f).length;
+  return {
+    N,
+    seat: cnt((r) => r.a1?.includes("seat")),
+    trash: cnt((r) => r.a1?.includes("trash")),
+    both: cnt((r) => r.a1?.length === 2),
+    a1none: cnt((r) => !r.a1?.length),
+    a2: [1, 2, 3, 4, 5].map((v) => cnt((r) => r.a2 === v)),
+    a2avg: N ? (rows.reduce((s, r) => s + (r.a2 || 0), 0) / N).toFixed(1) : "0.0",
+    b1: Q.b1.options.map((o) => cnt((r) => r.b1 === o.v)),
+    b2: Q.b2.options.map((o) => cnt((r) => r.b2 === o.v)),
+    c1: Q.c1.options.map((o) => cnt((r) => r.c1 === o.v)),
+  };
+}
+function bars(title, items, N) {
+  const box = document.createElement("div");
+  box.className = "q";
+  const h = document.createElement("h3"); h.textContent = title; box.append(h);
+  for (const [label, n] of items) {
+    const b = document.createElement("div"); b.className = "bar";
+    const l = document.createElement("div"); l.className = "lbl";
+    const a = document.createElement("span"); a.textContent = label;
+    const c = document.createElement("span"); c.textContent = `${n}（${pct(n, N)}%）`;
+    l.append(a, c);
+    const t = document.createElement("div"); t.className = "track";
+    const f = document.createElement("div"); f.className = "fill"; f.style.width = pct(n, N) + "%";
+    t.append(f); b.append(l, t); box.append(b);
+  }
+  return box;
+}
+let draftTouched = false;
+function renderAll() {
+  const s = summary();
+  $("total").textContent = s.N;
+  const st = $("stats"); st.innerHTML = "";
+  st.append(
+    bars("1. " + Q.a1.title, [["桌椅排回原位", s.seat], ["垃圾和飲料杯帶走", s.trash], ["兩項都做到", s.both], [Q.a1.none, s.a1none]], s.N),
+    bars(`2. 在意程度（平均 ${s.a2avg} / 5）`, s.a2.map((n, i) => [`${i + 1} 分`, n]), s.N),
+    bars("3. " + Q.b1.title, Q.b1.options.map((o, i) => [o.t, s.b1[i]]), s.N),
+    bars("4. " + Q.b2.title, Q.b2.options.map((o, i) => [o.t, s.b2[i]]), s.N),
+    bars("5. " + Q.c1.title, Q.c1.options.map((o, i) => [o.t, s.c1[i]]), s.N),
+  );
+
+  const box = $("msgs"); box.innerHTML = "";
+  const withMsg = rows.filter((r) => r.c2);
+  if (!withMsg.length) { const p = document.createElement("p"); p.className = "note"; p.textContent = "目前還沒有留言。"; box.append(p); }
+  for (const r of withMsg) {
+    const lab = document.createElement("label"); lab.className = "m" + (r.picked ? " picked" : "");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!r.picked;
+    cb.onchange = () => updateDoc(doc(db, "responses", r.id), { picked: cb.checked }).catch((e) => { alert(e.message); cb.checked = !cb.checked; });
+    const p = document.createElement("p"); p.textContent = r.c2;
+    lab.append(cb, p); box.append(lab);
+  }
+  $("pickedCount").textContent = `（已勾選 ${rows.filter((r) => r.picked).length} 則 / 共 ${withMsg.length} 則）`;
+  if (!draftTouched) $("draft").value = makeDraft(s);
+}
+
+function makeDraft(s) {
+  const N = s.N;
+  if (!N) return "";
+  const lines = [];
+  const add = (n, text) => { if (pct(n, N) >= 50) lines.push(`・有 ${pct(n, N)}% 的同學${text}`); };
+  add(s.seat, "離開跑班教室前，會把桌椅排回原位");
+  add(s.trash, "會把自己的垃圾和飲料杯帶走");
+  add(s.a2[3] + s.a2[4], "表示回到教室看到凌亂會在意，所以我們都懂得將心比心");
+  add(s.b1[0] + s.b1[1], "在同學失誤、心情低落時，會想主動關心");
+  add(s.b2[0] + s.b2[1] + s.b2[2], "在群組看到拿同學開玩笑的訊息時，不會跟著起鬨");
+  add(N - s.c1[3], "為自己選了這週要試試看的一小步");
+  const picked = rows.filter((r) => r.picked && r.c2);
+  let out = `【科週會自省回顧：共用的空間・共處的關係】\n謝謝 ${N} 位同學誠實參與。\n`;
+  if (lines.length) out += `\n我們發現：\n${lines.join("\n")}\n`;
+  if (picked.length) out += `\n同學們分享的好做法：\n${picked.map((r) => `「${r.c2}」`).join("\n")}\n`;
+  out += `\n你怎麼對待別人的教室，別人就怎麼對待我們的教室；你怎麼對待同學，未來就是怎麼對待臨床上的夥伴。`;
+  return out;
+}
+$("draft").addEventListener("input", () => (draftTouched = true));
+$("regen").onclick = () => { draftTouched = false; renderAll(); };
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText($("draft").value); $("copied").textContent = "已複製！"; }
+  catch { $("draft").select(); $("copied").textContent = "請按 Ctrl/⌘ + C 複製"; }
+  setTimeout(() => ($("copied").textContent = ""), 2500);
+};
+
+// ---------- 匯出 ----------
+$("csv").onclick = () => {
+  const t = (q, v) => Q[q].options.find((o) => o.v === v)?.t ?? "";
+  const head = ["第1題_桌椅歸位", "第1題_垃圾帶走", "第2題_在意程度", "第3題", "第4題", "第5題", "第6題_留言", "選為公布"];
+  const esc = (x) => `"${String(x ?? "").replace(/"/g, '""')}"`;
+  const lines = [head.map(esc).join(",")].concat(rows.map((r) => [
+    r.a1?.includes("seat") ? "是" : "否", r.a1?.includes("trash") ? "是" : "否", r.a2,
+    t("b1", r.b1), t("b2", r.b2), t("c1", r.c1), r.c2, r.picked ? "是" : "",
+  ].map(esc).join(",")));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `科週會自省_${cfg?.session || "export"}.csv`;
+  a.click();
+};
+</script>
+</body>
+</html>
